@@ -1,0 +1,106 @@
+local player = game.Players.LocalPlayer
+local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
+local userInputService = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
+local isLockedOn = false
+local targetPlayer = nil
+local maxDistance = 100
+
+-- Create a notification at the bottom of the screen
+local function createNotification(message)
+    local playerGui = player:WaitForChild("PlayerGui")
+    
+    -- Create the frame for the notification
+    local notificationFrame = Instance.new("Frame")
+    notificationFrame.Size = UDim2.new(0, 300, 0, 50)
+    notificationFrame.Position = UDim2.new(0.5, -150, 1, -100)
+    notificationFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    notificationFrame.BackgroundTransparency = 0.5
+    notificationFrame.Parent = playerGui
+    
+    -- Create the text label inside the frame
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Position = UDim2.new(0, 0, 0, 0)
+    textLabel.Text = message
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextSize = 20
+    textLabel.TextStrokeTransparency = 0.8
+    textLabel.BackgroundTransparency = 1
+    textLabel.Parent = notificationFrame
+
+    -- Remove the notification after 3 seconds
+    wait(3)
+    notificationFrame:Destroy()
+end
+
+-- Function to find the closest player to the mouse position
+local function findClosestPlayerToMouse()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+
+    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character then
+            local targetRootPart = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetRootPart then
+                local screenPos = camera:WorldToScreenPoint(targetRootPart.Position)
+                local mouseDistance = (Vector2.new(screenPos.X, screenPos.Y) - mouse.Position).Magnitude
+
+                if mouseDistance < shortestDistance then
+                    closestPlayer = otherPlayer
+                    shortestDistance = mouseDistance
+                end
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+-- Function to lock the camera on the target player's HumanoidRootPart
+local function lockCamera()
+    if targetPlayer and targetPlayer.Character then
+        local targetRootPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if targetRootPart then
+            local targetPosition = targetRootPart.Position
+            local distance = (player.Character.HumanoidRootPart.Position - targetPosition).Magnitude
+            local clampedDistance = math.min(distance, maxDistance)
+            local direction = (targetPosition - player.Character.HumanoidRootPart.Position).unit
+            local cameraPosition = targetPosition - direction * clampedDistance
+            camera.CFrame = CFrame.new(cameraPosition, targetPosition)
+        end
+    end
+end
+
+-- Function to reset the camera to default
+local function resetCamera()
+    camera.CameraType = Enum.CameraType.Custom
+    camera.CameraSubject = player.Character.Humanoid
+end
+
+-- Detect when the 'X' key is pressed
+userInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.X then
+        if isLockedOn then
+            resetCamera()
+            isLockedOn = false
+            createNotification("Unlocked from player")
+        else
+            targetPlayer = findClosestPlayerToMouse()
+            if targetPlayer then
+                camera.CameraType = Enum.CameraType.Scriptable
+                isLockedOn = true
+                createNotification("Locked into player")
+            end
+        end
+    end
+end)
+
+-- Update the camera position every frame when locked on
+runService.RenderStepped:Connect(function()
+    if isLockedOn then
+        lockCamera()
+    end
+end)
